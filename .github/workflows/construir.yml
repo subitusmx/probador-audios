@@ -1,0 +1,235 @@
+# Arma, prueba, firma y publica Probador de Audios para Mac y Windows.
+#  - En cada cambio: arma y prueba (sin firmar si faltan los certificados).
+#  - Al crear una etiqueta vX.Y.Z: además publica los instaladores en "Releases".
+name: Construir
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: construir-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mac:
+    name: Mac
+    runs-on: macos-latest
+    timeout-minutes: 75
+    env:
+      FIRMA_MAC: ${{ secrets.MAC_CERT_P12 != '' && secrets.APPLE_API_KEY_P8 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versión
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.0.${GITHUB_RUN_NUMBER}"; fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "BUILD=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "Versión: $V (firma: $FIRMA_MAC)"
+
+      - name: Importar certificado Developer ID
+        if: env.FIRMA_MAC == 'true'
+        env:
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/firma.keychain-db"
+          KCPASS="$(uuidgen)"
+          printf '%s' "$MAC_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KCPASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPASS" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MAC_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KCPASS" "$KC" > /dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          ID="$(security find-identity -v -p codesigning "$KC" | grep 'Developer ID Application' | head -1 | sed -E 's/.*"(.*)"/\1/')"
+          if [ -z "$ID" ]; then
+            echo "::error::El certificado no es de tipo 'Developer ID Application'."
+            security find-identity -v -p codesigning "$KC"
+            exit 1
+          fi
+          echo "MAC_IDENTIDAD=$ID" >> "$GITHUB_ENV"
+          echo "Firmando con: $ID"
+
+      - name: Armar la app
+        run: bash mac/construir.sh
+
+      - name: Notarizar la app
+        if: env.FIRMA_MAC == 'true'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          ditto -c -k --keepParent "dist/Probador de Audios.app" dist/app.zip
+          bash mac/notarizar.sh dist/app.zip
+          rm dist/app.zip
+          xcrun stapler staple "dist/Probador de Audios.app"
+
+      - name: Crear el .dmg
+        run: bash mac/crear_dmg.sh
+
+      - name: Notarizar el .dmg
+        if: env.FIRMA_MAC == 'true'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          bash mac/notarizar.sh dist/ProbadorAudios-Mac.dmg
+          xcrun stapler staple dist/ProbadorAudios-Mac.dmg
+
+      - name: Comprobar que Gatekeeper la acepta
+        if: env.FIRMA_MAC == 'true'
+        run: |
+          spctl --assess --type execute --verbose=4 "dist/Probador de Audios.app"
+          spctl --assess --type open --context context:primary-signature --verbose=4 dist/ProbadorAudios-Mac.dmg
+          xcrun stapler validate dist/ProbadorAudios-Mac.dmg
+
+      - name: Prueba real con voz sintética (abriendo la app)
+        run: |
+          VOZ="$(say -v '?' | grep -E ' es_(MX|US|ES|419)' | head -1 | sed -E 's/ +es_(MX|US|ES|419).*//' || true)"
+          if [ -n "$VOZ" ]; then
+            IDIOMA=es
+            TEXTO="Hola, bienvenidos al curso de atención a clientes. Hoy vamos a aprender tres cosas importantes."
+            say -v "$VOZ" -o prueba.aiff "$TEXTO"
+          else
+            IDIOMA=en
+            TEXTO="Hello and welcome to the customer service course. Today we will learn three important things."
+            say -o prueba.aiff "$TEXTO"
+          fi
+          echo "Voz: ${VOZ:-predeterminada} ($IDIOMA)"
+          afconvert -f m4af -d aac prueba.aiff prueba.m4a
+          open -n --env PROBADOR_MODELO=small --env PROBADOR_SIN_NAVEGADOR=1 "dist/Probador de Audios.app"
+          python3 tests/e2e.py --audio prueba.m4a --texto "$TEXTO" --idioma "$IDIOMA" --minutos 30
+
+      - name: Comprobar que al salir de la app se apaga el servidor
+        run: |
+          osascript -e 'quit app "Probador de Audios"'
+          for i in $(seq 1 20); do
+            sleep 1
+            curl -s -m 1 http://127.0.0.1:8765/api/ping > /dev/null || { echo "Servidor apagado"; exit 0; }
+          done
+          echo "::error::El servidor siguió encendido después de salir de la app"
+          exit 1
+
+      - name: Registro de la app
+        if: always()
+        run: cat ~/Library/Logs/ProbadorAudios.log 2>/dev/null | tail -150 || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: dist/ProbadorAudios-Mac.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      FIRMA_WIN: ${{ secrets.WIN_FIRMA_CONFIGURADA == 'si' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versión
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.0.${GITHUB_RUN_NUMBER}"; fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      - name: Armar el instalador
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc "/DVersion=$env:VERSION" windows\ProbadorAudios.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Item dist\ProbadorAudios-Windows-Setup.exe
+
+      # (Aquí se agrega la firma con el certificado en la nube cuando esté configurado)
+
+      - name: Instalar en modo silencioso
+        shell: pwsh
+        run: |
+          Start-Process dist\ProbadorAudios-Windows-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          $dir = "$env:LOCALAPPDATA\Programs\ProbadorAudios"
+          if (-not (Test-Path "$dir\iniciar.bat")) { throw "No se instaló" }
+          $menu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Probador de Audios.lnk"
+          if (-not (Test-Path $menu)) { throw "Falta el acceso directo del menú Inicio" }
+          Get-ChildItem -Recurse $dir | Select-Object -First 20 FullName
+
+      - name: Prueba real con voz sintética
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Speech
+          $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+          $voz = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'es-*' } | Select-Object -First 1
+          if ($voz) {
+            $s.SelectVoice($voz.VoiceInfo.Name); $idioma = 'es'
+            $texto = 'Hola, bienvenidos al curso de atención a clientes. Hoy vamos a aprender tres cosas importantes.'
+          } else {
+            $idioma = 'en'
+            $texto = 'Hello and welcome to the customer service course. Today we will learn three important things.'
+          }
+          Write-Host "Voz: $($s.Voice.Name) ($idioma)"
+          $s.SetOutputToWaveFile("$PWD\prueba.wav"); $s.Speak($texto); $s.Dispose()
+
+          $env:PROBADOR_MODELO = 'small'
+          $env:PROBADOR_SIN_NAVEGADOR = '1'
+          $p = Start-Process "$env:LOCALAPPDATA\Programs\ProbadorAudios\iniciar.bat" -PassThru -NoNewWindow `
+                 -RedirectStandardOutput servidor.log -RedirectStandardError servidor.err
+          "$($p.Id)" | Out-File pid.txt
+          python tests/e2e.py --audio prueba.wav --texto $texto --idioma $idioma --minutos 30
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Registro del servidor
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path servidor.log) { Get-Content servidor.log -Tail 120 }
+          if (Test-Path servidor.err) { Get-Content servidor.err -Tail 120 }
+
+      - name: Desinstalar y comprobar limpieza
+        shell: pwsh
+        run: |
+          if (Test-Path pid.txt) { taskkill /PID (Get-Content pid.txt) /T /F 2>$null }
+          Start-Sleep 3
+          $dir = "$env:LOCALAPPDATA\Programs\ProbadorAudios"
+          Start-Process "$dir\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          for ($i = 0; $i -lt 60 -and ((Test-Path "$dir\iniciar.bat") -or (Test-Path "$env:LOCALAPPDATA\ProbadorAudios")); $i++) { Start-Sleep 2 }
+          if (Test-Path "$dir\iniciar.bat") { throw "La desinstalación no borró la app" }
+          if (Test-Path "$env:LOCALAPPDATA\ProbadorAudios") { throw "La desinstalación no borró el modelo y componentes" }
+          Write-Host "Desinstalación limpia"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/ProbadorAudios-Windows-Setup.exe
+          if-no-files-found: error
+
+  publicar:
+    name: Publicar versión
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Crear la versión en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
+            --title "Probador de Audios ${GITHUB_REF_NAME#v}" --generate-notes

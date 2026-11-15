@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probador de Audios</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 26 26%22%3E%3Crect width=%2226%22 height=%2226%22 rx=%226%22 fill=%22%231C2430%22/%3E%3Cg fill=%22%23fff%22%3E%3Crect x=%224%22 y=%2210%22 width=%222.4%22 height=%226%22/%3E%3Crect x=%228.5%22 y=%226%22 width=%222.4%22 height=%2214%22/%3E%3Crect x=%2213%22 y=%224%22 width=%222.4%22 height=%2218%22/%3E%3C/g%3E%3Cpath d=%22M16 15l2.5 2.5 4-5%22 stroke=%22%237FD3A6%22 stroke-width=%222.4%22 fill=%22none%22/%3E%3C/svg%3E">
+<style>
+  :root{
+    --fondo:#EDF0F3;
+    --hoja:#FFFFFF;
+    --tinta:#1C2430;
+    --tinta-suave:#5B6676;
+    --regla:#D5DBE2;
+    --lapiz:#C8102E;       /* error: lápiz rojo de corrector */
+    --lapiz-fondo:#FBE7EA;
+    --ambar:#A86A12;
+    --ambar-fondo:#FBF1DF;
+    --verde:#1E7A4C;
+    --verde-fondo:#E2F2E9;
+    --azul:#2F4BA8;        /* acciones */
+    --azul-fondo:#E6EAF7;
+    --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    --guion: "Iowan Old Style", "Charter", "Palatino", Georgia, serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--ui);font-size:15px;line-height:1.45;color:var(--tinta);background:var(--fondo)}
+  button,input,select,textarea{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+
+  /* ---------- Barra superior ---------- */
+  .barra{position:sticky;top:0;z-index:20;background:var(--tinta);color:#fff}
+  .barra-in{max-width:1180px;margin:0 auto;padding:14px 24px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  .marca{display:flex;align-items:center;gap:10px;margin-right:auto}
+  .marca svg{flex:none}
+  .marca h1{font-size:17px;font-weight:650;margin:0;letter-spacing:-.01em}
+  .ajuste{display:flex;align-items:center;gap:6px;font-size:13px;color:#C9D1DC}
+  .ajuste select{background:#2A3546;border:1px solid #3B4860;border-radius:6px;padding:5px 8px;color:#fff}
+  .btn{border:1px solid var(--regla);background:var(--hoja);border-radius:7px;padding:7px 13px;cursor:pointer;white-space:nowrap}
+  .btn:hover{border-color:#AEB8C5}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn-primario{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:600}
+  .btn-primario:hover{background:#243C8C;border-color:#243C8C}
+  .btn-texto{border:0;background:none;padding:6px 8px;color:var(--tinta-suave);cursor:pointer;border-radius:6px}
+  .btn-texto:hover{background:#E1E6EC;color:var(--tinta)}
+
+  main{max-width:1180px;margin:0 auto;padding:22px 24px 80px}
+
+  /* ---------- Resumen ---------- */
+  .resumen{display:grid;grid-template-columns:1fr auto;gap:14px 28px;align-items:end;margin-bottom:18px}
+  .cifras{display:flex;gap:28px;flex-wrap:wrap}
+  .cifra b{display:block;font-size:30px;line-height:1;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .cifra span{font-size:13px;color:var(--tinta-suave)}
+  .cifra.ok b{color:var(--verde)} .cifra.rev b{color:var(--ambar)} .cifra.err b{color:var(--lapiz)}
+  .cinta{grid-column:1 / -1;height:8px;border-radius:4px;background:#DCE1E7;display:flex;overflow:hidden}
+  .cinta i{display:block;height:100%;transition:width .4s}
+  .cinta .ok{background:var(--verde)} .cinta .rev{background:#D39A3A} .cinta .err{background:var(--lapiz)}
+  .acciones{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .estado-lote{grid-column:1 / -1;font-size:13px;color:var(--tinta-suave);min-height:18px}
+
+  .herramientas{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 0 14px;border-bottom:1px solid var(--regla);margin-bottom:6px}
+  .herramientas .sep{flex:1}
+  .filtro{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--tinta-suave)}
+
+  /* ---------- Filas ---------- */
+  .fila{display:grid;grid-template-columns:46px 1fr;gap:0 14px;padding:18px 0;border-bottom:1px solid var(--regla)}
+  .num{font-family:var(--guion);font-size:22px;color:#9AA5B3;text-align:right;padding-top:2px;font-variant-numeric:tabular-nums}
+  .fila.v-correcto .num, .fila.v-correcto_menor .num{color:var(--verde)}
+  .fila.v-revisar .num{color:var(--ambar)}
+  .fila.v-error .num{color:var(--lapiz)}
+  .cabeza{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .titulo{flex:1;min-width:180px;border:0;border-bottom:1px dashed transparent;background:none;font-weight:600;font-size:15px;padding:3px 0}
+  .titulo:hover,.titulo:focus{border-bottom-color:#AEB8C5;outline:none}
+  .veredicto{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;padding:4px 10px;border-radius:20px;background:#E1E6EC;color:var(--tinta-suave)}
+  .veredicto .pct{font-variant-numeric:tabular-nums}
+  .veredicto.correcto,.veredicto.correcto_menor{background:var(--verde-fondo);color:var(--verde)}
+  .veredicto.revisar{background:var(--ambar-fondo);color:var(--ambar)}
+  .veredicto.error{background:var(--lapiz-fondo);color:var(--lapiz)}
+  .veredicto.procesando{background:var(--azul-fondo);color:var(--azul)}
+  .veredicto.viejo{background:#EEE;color:#777;text-decoration:line-through}
+  .girar{width:11px;height:11px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:g 0.8s linear infinite}
+  @keyframes g{to{transform:rotate(360deg)}}
+
+  .cuerpo{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:14px}
+  .audio-caja{border:1.5px dashed #B9C3CF;border-radius:8px;padding:12px;background:#F6F8FA;display:flex;flex-direction:column;gap:8px;justify-content:center;min-height:110px;cursor:pointer;text-align:center;color:var(--tinta-suave);font-size:13px}
+  .audio-caja.tiene{border-style:solid;border-color:var(--regla);background:var(--hoja);cursor:default;text-align:left}
+  .audio-caja.encima{border-color:var(--azul);background:var(--azul-fondo)}
+  .audio-caja audio{width:100%;height:34px}
+  .archivo-nombre{font-size:12px;color:var(--tinta-suave);word-break:break-all;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .archivo-nombre button{font-size:12px;padding:2px 6px}
+  textarea.texto{width:100%;min-height:110px;resize:vertical;border:1px solid var(--regla);border-radius:8px;padding:10px 12px;background:var(--hoja);font-family:var(--guion);font-size:16px;line-height:1.55}
+  textarea.texto::placeholder{color:#9AA5B3;font-family:var(--ui);font-size:14px}
+
+  /* ---------- Resultado: marcas de corrector ---------- */
+  .resultado{margin-top:12px;background:var(--hoja);border:1px solid var(--regla);border-radius:8px;padding:14px 16px}
+  .conteos{font-size:13px;color:var(--tinta-suave);margin-bottom:8px;display:flex;gap:16px;flex-wrap:wrap}
+  .conteos b{color:var(--tinta)}
+  .lectura{font-family:var(--guion);font-size:17px;line-height:2.05;max-width:78ch}
+  .lectura span{cursor:pointer;border-radius:3px;padding:1px 0;white-space:nowrap}
+  .lectura span:hover{background:#EEF1F5}
+  .m-omitida{color:var(--lapiz);text-decoration:line-through;text-decoration-thickness:2px;background:var(--lapiz-fondo)!important;padding:1px 3px!important}
+  .m-cambiada del{color:var(--lapiz);text-decoration-thickness:2px}
+  .m-cambiada ins{text-decoration:none;color:var(--lapiz);font-style:italic;font-family:var(--ui);font-size:13px;font-weight:600;vertical-align:4px;margin-left:3px}
+  .m-similar{text-decoration:underline dotted var(--ambar);text-decoration-thickness:2px;text-underline-offset:4px}
+  .m-agregada{color:var(--lapiz);font-family:var(--ui);font-size:13px;font-weight:600;font-style:italic;background:var(--lapiz-fondo)!important;padding:1px 4px!important}
+  .m-agregada::before{content:"‸ ";font-style:normal}
+  .leyenda{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--tinta-suave);margin-top:10px;padding-top:10px;border-top:1px solid #EEF1F4}
+  .leyenda span{display:inline-flex;gap:6px;align-items:center}
+  details.escuchado{margin-top:8px;font-size:13px;color:var(--tinta-suave)}
+  details.escuchado summary{cursor:pointer}
+  details.escuchado p{font-family:var(--guion);font-size:15px;color:var(--tinta);margin:6px 0 0;max-width:78ch}
+  .mensaje{margin-top:10px;font-size:13px;color:var(--tinta-suave)}
+  .mensaje.error{color:var(--lapiz)}
+  .aviso-viejo{font-size:13px;color:var(--ambar);margin-top:8px}
+
+  .vacio{padding:34px 0;text-align:center;color:var(--tinta-suave)}
+
+  /* ---------- Soltar archivos sobre la página ---------- */
+  .soltar{position:fixed;inset:0;background:rgba(28,36,48,.82);color:#fff;display:none;align-items:center;justify-content:center;z-index:50;font-size:22px;font-weight:600;text-align:center}
+  .soltar.on{display:flex}
+  .soltar small{display:block;font-size:14px;font-weight:400;opacity:.8;margin-top:8px}
+
+  .nota-modelo{font-size:12px;color:#C9D1DC;width:100%;text-align:right;margin-top:-6px}
+  .nota-modelo:empty{display:none}
+  .nota-modelo.activa{color:#FFD58A;font-weight:600;font-size:13px}
+
+  @media (max-width:760px){
+    .cuerpo{grid-template-columns:1fr}
+    .fila{grid-template-columns:30px 1fr}
+    .resumen{grid-template-columns:1fr}
+    .acciones{justify-content:flex-start}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  @media print{
+    .barra,.herramientas,.acciones,.audio-caja,textarea.texto,.btn,.btn-texto{display:none!important}
+    body{background:#fff}
+    .cuerpo{display:block}
+  }
+</style>
+</head>
+<body>
+
+<header class="barra">
+  <div class="barra-in">
+    <div class="marca">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <g fill="#fff"><rect x="2" y="10" width="2.4" height="6" rx="1.2"/><rect x="6.5" y="6" width="2.4" height="14" rx="1.2"/><rect x="11" y="3" width="2.4" height="20" rx="1.2"/><rect x="15.5" y="8" width="2.4" height="10" rx="1.2"/></g>
+        <path d="M18.5 15.5l2.6 2.6 4-5.2" stroke="#7FD3A6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>Probador de Audios</h1>
+    </div>
+    <label class="ajuste">Idioma
+      <select id="idioma">
+        <option value="es">Español (Latinoamérica)</option>
+        <option value="en">Inglés (Estados Unidos)</option>
+      </select>
+    </label>
+    <div class="nota-modelo" id="notaModelo"></div>
+  </div>
+</header>
+
+<main>
+  <section class="resumen" aria-label="Resumen">
+    <div class="cifras">
+      <div class="cifra"><b id="cTotal">0</b><span>audios</span></div>
+      <div class="cifra ok"><b id="cOk">0</b><span>correctos</span></div>
+      <div class="cifra rev"><b id="cRev">0</b><span>por revisar</span></div>
+      <div class="cifra err"><b id="cErr">0</b><span>con errores</span></div>
+      <div class="cifra"><b id="cPen">0</b><span>sin verificar</span></div>
+    </div>
+    <div class="acciones">
+      <button class="btn btn-primario" id="btnTodos">Verificar todos</button>
+    </div>
+    <div class="cinta" aria-hidden="true"><i class="ok" id="tOk"></i><i class="rev" id="tRev"></i><i class="err" id="tErr"></i></div>
+    <div class="estado-lote" id="estadoLote" aria-live="polite"></div>
+  </section>
+
+  <div class="herramientas">
+    <button class="btn" id="btnAgregar">Agregar audio</button>
+    <button class="btn" id="btnVarios">Cargar varios audios</button>
+    <span class="sep"></span>
+    <label class="filtro"><input type="checkbox" id="soloProblemas"> Solo con problemas</label>
+    <button class="btn-texto" id="btnCsv">Exportar a Excel (CSV)</button>
+    <button class="btn-texto" id="btnImprimir">Imprimir reporte</button>
+    <button class="btn-texto" id="btnNuevo">Nuevo proyecto</button>
+  </div>
+
+  <div id="filas"></div>
+  <input type="file" id="inputVarios" accept="audio/*,.mp3,.wav,.m4a" multiple hidden>
+  <input type="file" id="inputUno" accept="audio/*,.mp3,.wav,.m4a" hidden>
+</main>
+
+<div class="soltar" id="soltar">Suelta aquí tus audios<small>Se agregan en orden por nombre de archivo</small></div>
+
+
+<script>
+const $ = s => document.querySelector(s);
+const API = (url, opt={}) => fetch(url, opt).then(r => r.json());
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+const estado = { filas: [], idioma: "es", modelo: "large-v3" };
+let lote = null; // {total, ids:Set}
+
+const NOMBRES = {
+  correcto: "Correcto", correcto_menor: "Correcto", revisar: "Revisar", error: "Con errores",
+};
+
+function nuevaFila(datos = {}) {
+  return { id: uid(), titulo: "", texto: "", audio: null, resultado: null, firmaResultado: null, estado: "pendiente", mensaje: "", ...datos };
+}
+const firma = f => [f.texto.trim(), f.audio?.id || "", estado.idioma, estado.modelo].join("|");
+function situacion(f) {
+  if (f.estado === "procesando" || f.estado === "en_cola") return "procesando";
+  if (f.estado === "error") return "fallo";
+  if (!f.resultado) return "pendiente";
+  if (f.firmaResultado !== firma(f)) return "viejo";
+  return f.resultado.veredicto;
+}
+const lista = f => !!(f.audio && f.texto.trim());
+
+/* ---------------- Guardado automático ---------------- */
+let tGuardar;
+function guardar() {
+  clearTimeout(tGuardar);
+  tGuardar = setTimeout(() => {
+    const filas = estado.filas.map(f => ({ ...f, estado: f.estado === "procesando" || f.estado === "en_cola" ? "pendiente" : f.estado, trabajo: undefined }));
+    fetch("/api/proyecto", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...estado, filas }) });
+  }, 500);
+}
+
+/* ---------------- Render ---------------- */
+function render() {
+  const cont = $("#filas");
+  cont.innerHTML = "";
+  const solo = $("#soloProblemas").checked;
+  let visibles = 0;
+  estado.filas.forEach((f, i) => {
+    const s = situacion(f);
+    if (solo && !["revisar", "error", "fallo"].includes(s)) return;
+    visibles++;
+    cont.appendChild(filaEl(f, i));
+  });
+  if (!visibles) {
+    cont.innerHTML = solo
+      ? `<div class="vacio">No hay audios con problemas.</div>`
+      : `<div class="vacio">Arrastra tus audios a esta página o usa “Agregar audio”.</div>`;
+  }
+  resumen();
+}
+
+function filaEl(f, i) {
+  const el = document.createElement("article");
+  el.className = "fila";
+  el.dataset.id = f.id;
+  el.innerHTML = `
+    <div class="num">${i + 1}</div>
+    <div>
+      <div class="cabeza">
+        <input class="titulo" value="${esc(f.titulo)}" placeholder="Nombre del audio (opcional)" aria-label="Nombre del audio ${i + 1}">
+        <span class="veredicto-slot"></span>
+        <button class="btn btn-verificar">Verificar</button>
+        <button class="btn-texto btn-quitar" title="Quitar este audio" aria-label="Quitar audio ${i + 1}">Quitar</button>
+      </div>
+      <div class="cuerpo">
+        <div class="audio-caja" tabindex="0"></div>
+        <textarea class="texto" placeholder="Pega aquí el texto original que debe decir este audio" aria-label="Texto original del audio ${i + 1}">${esc(f.texto)}</textarea>
+      </div>
+      <div class="resultado-slot"></div>
+    </div>`;
+
+  el.querySelector(".titulo").addEventListener("input", e => { f.titulo = e.target.value; guardar(); });
+  el.querySelector(".texto").addEventListener("input", e => { f.texto = e.target.value; actualizarFila(f, { sinAudio: true }); guardar(); });
+  el.querySelector(".btn-verificar").addEventListener("click", () => verificar(f));
+  el.querySelector(".btn-quitar").addEventListener("click", () => {
+    if ((f.texto.trim() || f.audio) && !confirm("¿Quitar este audio y su texto?")) return;
+    estado.filas = estado.filas.filter(x => x !== f);
+    render(); guardar();
+  });
+
+  const caja = el.querySelector(".audio-caja");
+  caja.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); caja.classList.add("encima"); });
+  caja.addEventListener("dragleave", () => caja.classList.remove("encima"));
+  caja.addEventListener("drop", async e => {
+    e.preventDefault(); e.stopPropagation(); caja.classList.remove("encima"); ocultarSoltar();
+    const archivos = [...e.dataTransfer.files];
+    if (archivos.length) await asignarAudio(f, archivos[0]);
+  });
+  const abrir = () => { if (f.audio) return; const inp = $("#inputUno"); inp.onchange = async () => { if (inp.files[0]) await asignarAudio(f, inp.files[0]); inp.value = ""; }; inp.click(); };
+  caja.addEventListener("click", e => { if (e.target === caja || e.target.closest(".elegir")) abrir(); });
+  caja.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && !f.audio) { e.preventDefault(); abrir(); } });
+
+  actualizarFila(f, { el });
+  return el;
+}
+
+function actualizarFila(f, { el, sinAudio } = {}) {
+  el = el || document.querySelector(`.fila[data-id="${f.id}"]`);
+  if (!el) { resumen(); return; }
+  const s = situacion(f);
+  el.className = "fila v-" + s;
+
+  // Audio
+  if (!sinAudio) {
+    const caja = el.querySelector(".audio-caja");
+    if (f.audio) {
+      caja.className = "audio-caja tiene";
+      caja.innerHTML = `<audio controls preload="metadata" src="/api/audio/${encodeURIComponent(f.audio.id)}"></audio>
+        <div class="archivo-nombre"><span>${esc(f.audio.nombre)}</span><button class="btn-texto cambiar">Cambiar</button></div>`;
+      caja.querySelector(".cambiar").onclick = () => {
+        const inp = $("#inputUno"); inp.onchange = async () => { if (inp.files[0]) await asignarAudio(f, inp.files[0]); inp.value = ""; }; inp.click();
+      };
+    } else {
+      caja.className = "audio-caja";
+      caja.innerHTML = `<div class="elegir"><strong>Arrastra el audio aquí</strong><br>o haz clic para elegirlo</div>`;
+    }
+  }
+
+  // Veredicto
+  const slot = el.querySelector(".veredicto-slot");
+  let v = "";
+  if (s === "procesando") v = `<span class="veredicto procesando"><span class="girar"></span>Verificando</span>`;
+  else if (["correcto", "correcto_menor", "revisar", "error"].includes(s))
+    v = `<span class="veredicto ${s}">${NOMBRES[s]} <span class="pct">${f.resultado.porcentaje}%</span></span>`;
+  else if (s === "viejo") v = `<span class="veredicto viejo">${f.resultado.porcentaje}%</span>`;
+  else if (s === "fallo") v = `<span class="veredicto error">No se pudo verificar</span>`;
+  slot.innerHTML = v;
+
+  const btn = el.querySelector(".btn-verificar");
+  btn.disabled = !lista(f) || s === "procesando";
+  btn.textContent = f.resultado ? "Verificar de nuevo" : "Verificar";
+
+  // Resultado
+  const rs = el.querySelector(".resultado-slot");
+  if (s === "procesando" || s === "fallo") {
+    rs.innerHTML = `<div class="mensaje ${s === "fallo" ? "error" : ""}">${esc(f.mensaje)}</div>`;
+  } else if (f.resultado) {
+    rs.innerHTML = resultadoHtml(f, s === "viejo");
+    rs.querySelectorAll(".lectura span[data-t]").forEach(sp => sp.addEventListener("click", () => reproducir(el, +sp.dataset.t)));
+  } else {
+    rs.innerHTML = "";
+  }
+  resumen();
+}
+
+function resultadoHtml(f, viejo) {
+  const r = f.resultado;
+  const partes = r.segmentos.map(sg => {
+    const t = `data-t="${sg.t}"`;
+    switch (sg.tipo) {
+      case "ok": return `<span ${t}>${esc(sg.texto)}</span>`;
+      case "omitida": return `<span class="m-omitida" ${t} title="No se escuchó en el audio">${esc(sg.texto)}</span>`;
+      case "cambiada": return `<span class="m-cambiada" ${t} title="Se escuchó otra cosa"><del>${esc(sg.texto)}</del>${sg.escuchado ? `<ins>${esc(sg.escuchado)}</ins>` : ""}</span>`;
+      case "similar": return `<span class="m-similar" ${t} title="Se escuchó “${esc(sg.escuchado || "")}”: suena igual, probablemente está bien">${esc(sg.texto)}</span>`;
+      case "agregada": return `<span class="m-agregada" ${t} title="Esto se escuchó pero no está en el texto">${esc(sg.texto)}</span>`;
+    }
+    return "";
+  }).join(" ");
+  const c = [];
+  if (r.omitidas) c.push(`<span><b>${r.omitidas}</b> ${r.omitidas === 1 ? "palabra faltante" : "palabras faltantes"}</span>`);
+  if (r.cambiadas) c.push(`<span><b>${r.cambiadas}</b> ${r.cambiadas === 1 ? "palabra cambiada" : "palabras cambiadas"}</span>`);
+  if (r.agregadas) c.push(`<span><b>${r.agregadas}</b> ${r.agregadas === 1 ? "palabra de más" : "palabras de más"}</span>`);
+  if (r.similares) c.push(`<span><b>${r.similares}</b> suenan igual (probablemente bien)</span>`);
+  if (!c.length) c.push(`<span>Todas las palabras coinciden.</span>`);
+  c.push(`<span>${r.total_palabras} palabras, audio de ${r.duracion_audio} s</span>`);
+  return `<div class="resultado">
+    <div class="conteos">${c.join("")}</div>
+    <div class="lectura">${partes}</div>
+    ${viejo ? `<div class="aviso-viejo">Cambiaste el texto, el audio o la configuración. Verifica de nuevo para actualizar.</div>` : ""}
+    <details class="escuchado"><summary>Ver lo que se escuchó en el audio</summary><p>${esc(r.transcripcion) || "<em>No se escuchó nada.</em>"}</p></details>
+    <div class="leyenda">
+      <span>Haz clic en cualquier palabra para escucharla</span>
+      <span><span class="m-omitida">falta</span> no se dijo</span>
+      <span><span class="m-cambiada"><del>texto</del><ins>dicho</ins></span> se dijo otra cosa</span>
+      <span><span class="m-agregada">extra</span> se dijo de más</span>
+      <span><span class="m-similar">casa</span> suena igual</span>
+    </div>
+  </div>`;
+}
+
+function reproducir(el, t) {
+  const a = el.querySelector("audio");
+  if (!a) return;
+  document.querySelectorAll("audio").forEach(x => { if (x !== a) x.pause(); });
+  a.currentTime = Math.max(0, t - 0.3);
+  a.play();
+}
+
+function resumen() {
+  const n = estado.filas.length;
+  let ok = 0, rev = 0, err = 0, pen = 0;
+  estado.filas.forEach(f => {
+    const s = situacion(f);
+    if (s === "correcto" || s === "correcto_menor") ok++;
+    else if (s === "revisar") rev++;
+    else if (s === "error" || s === "fallo") err++;
+    else pen++;
+  });
+  $("#cTotal").textContent = n; $("#cOk").textContent = ok; $("#cRev").textContent = rev; $("#cErr").textContent = err; $("#cPen").textContent = pen;
+  const pct = x => n ? (100 * x / n) + "%" : "0";
+  $("#tOk").style.width = pct(ok); $("#tRev").style.width = pct(rev); $("#tErr").style.width = pct(err);
+
+  if (lote) {
+    const restantes = estado.filas.filter(f => lote.ids.has(f.id) && situacion(f) === "procesando").length;
+    const hechos = lote.total - restantes;
+    $("#estadoLote").textContent = restantes ? `Verificando ${hechos + 1} de ${lote.total}…` : `Listo: se verificaron ${lote.total} audios.`;
+    if (!restantes) lote = null;
+  }
+  $("#btnTodos").disabled = !estado.filas.some(f => lista(f) && situacion(f) !== "procesando");
+}
+
+/* ---------------- Audios ---------------- */
+async function subir(archivos) {
+  const fd = new FormData();
+  archivos.forEach(a => fd.append("archivo", a));
+  const r = await API("/api/subir", { method: "POST", body: fd });
+  return r.archivos;
+}
+async function asignarAudio(f, archivo) {
+  const [a] = await subir([archivo]);
+  if (a.error) { alert(`${a.nombre}: ${a.error}`); return; }
+  f.audio = a;
+  if (!f.titulo) f.titulo = a.nombre.replace(/\.[^.]+$/, "");
+  actualizarFila(f); guardar();
+}
+const ordenNatural = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+async function agregarVarios(archivos) {
+  archivos = archivos.filter(a => /\.(mp3|wav|m4a|aac|ogg|flac|aiff?|mp4|webm|opus)$/i.test(a.name)).sort(ordenNatural);
+  if (!archivos.length) return;
+  $("#estadoLote").textContent = `Cargando ${archivos.length} audios…`;
+  const subidos = (await subir(archivos)).filter(a => !a.error);
+  // Primero llenar filas que no tienen audio, en orden; luego crear filas nuevas
+  const libres = estado.filas.filter(f => !f.audio);
+  subidos.forEach(a => {
+    let f = libres.shift();
+    if (!f) { f = nuevaFila(); estado.filas.push(f); }
+    f.audio = a;
+    if (!f.titulo) f.titulo = a.nombre.replace(/\.[^.]+$/, "");
+  });
+  $("#estadoLote").textContent = `Se cargaron ${subidos.length} audios.`;
+  render(); guardar();
+}
+
+/* ---------------- Verificar ---------------- */
+async function verificar(f) {
+  if (!lista(f)) return;
+  f.estado = "en_cola"; f.mensaje = "En espera…";
+  actualizarFila(f);
+  try {
+    const r = await API("/api/verificar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio: f.audio.id, texto: f.texto, idioma: estado.idioma, modelo: estado.modelo }),
+    });
+    if (r.error) throw new Error(r.error);
+    f.trabajo = r.trabajo;
+    f.firmaPendiente = firma(f);
+    seguir(f);
+  } catch (e) {
+    f.estado = "error"; f.mensaje = e.message; actualizarFila(f);
+  }
+}
+async function seguir(f) {
+  let r;
+  try { r = await API(`/api/trabajo/${f.trabajo}`); }
+  catch { f.estado = "error"; f.mensaje = "Se perdió la conexión con la app. ¿Cerraste la ventana de Terminal?"; actualizarFila(f); return; }
+  if (r.estado === "listo") {
+    f.resultado = r.resultado; f.firmaResultado = f.firmaPendiente; f.estado = "listo"; f.mensaje = "";
+    actualizarFila(f); guardar(); return;
+  }
+  if (r.estado === "error" || r.estado === "perdido") { f.estado = "error"; f.mensaje = r.mensaje; actualizarFila(f); return; }
+  f.estado = "procesando"; f.mensaje = r.mensaje;
+  const el = document.querySelector(`.fila[data-id="${f.id}"] .mensaje`);
+  if (el) el.textContent = r.mensaje; else actualizarFila(f);
+  setTimeout(() => seguir(f), 900);
+}
+function verificarTodos() {
+  const objetivo = estado.filas.filter(f => lista(f) && !["procesando"].includes(situacion(f)));
+  // Si hay pendientes, solo esos; si todo está verificado, volver a verificar todo
+  const pendientes = objetivo.filter(f => !["correcto", "correcto_menor", "revisar", "error"].includes(situacion(f)));
+  const lista_ = pendientes.length ? pendientes : objetivo;
+  if (!lista_.length) return;
+  lote = { total: lista_.length, ids: new Set(lista_.map(f => f.id)) };
+  lista_.forEach(verificar);
+  const faltan = estado.filas.filter(f => !lista(f)).length;
+  if (faltan) setTimeout(() => { if (lote) $("#estadoLote").textContent += ` (${faltan} sin audio o sin texto se omitieron)`; }, 50);
+}
+
+/* ---------------- Exportar ---------------- */
+function detalle(r) {
+  const d = [];
+  r.segmentos.forEach(s => {
+    if (s.tipo === "omitida") d.push(`falta: ${s.texto}`);
+    if (s.tipo === "cambiada") d.push(`"${s.texto}" se dijo "${s.escuchado || "?"}"`);
+    if (s.tipo === "agregada") d.push(`de más: ${s.texto}`);
+  });
+  return d.join(" | ");
+}
+function exportarCsv() {
+  const filas = [["#", "Nombre", "Archivo", "Resultado", "Concordancia %", "Faltantes", "Cambiadas", "De más", "Suenan igual", "Detalle", "Texto original", "Lo que se escuchó"]];
+  estado.filas.forEach((f, i) => {
+    const s = situacion(f), r = f.resultado;
+    const nombre = { correcto: "Correcto", correcto_menor: "Correcto", revisar: "Revisar", error: "Con errores", fallo: "No se pudo verificar", viejo: "Desactualizado", pendiente: "Sin verificar", procesando: "Verificando" }[s];
+    filas.push([i + 1, f.titulo, f.audio?.nombre || "", nombre, r ? r.porcentaje : "", r ? r.omitidas : "", r ? r.cambiadas : "", r ? r.agregadas : "", r ? r.similares : "", r ? detalle(r) : "", f.texto, r ? r.transcripcion : ""]);
+  });
+  const csv = "﻿" + filas.map(fl => fl.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `reporte-audios-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+}
+
+/* ---------------- Arrastrar a la página ---------------- */
+let arrastres = 0;
+const ocultarSoltar = () => { arrastres = 0; $("#soltar").classList.remove("on"); };
+window.addEventListener("dragenter", e => { if ([...e.dataTransfer.types].includes("Files")) { arrastres++; $("#soltar").classList.add("on"); } });
+window.addEventListener("dragleave", () => { if (--arrastres <= 0) ocultarSoltar(); });
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => { e.preventDefault(); ocultarSoltar(); agregarVarios([...e.dataTransfer.files]); });
+
+/* ---------------- Controles ---------------- */
+$("#btnAgregar").onclick = () => { estado.filas.push(nuevaFila()); render(); guardar(); document.querySelector(".fila:last-child .texto")?.focus(); };
+$("#btnVarios").onclick = () => $("#inputVarios").click();
+$("#inputVarios").onchange = e => { agregarVarios([...e.target.files]); e.target.value = ""; };
+$("#btnTodos").onclick = verificarTodos;
+$("#btnCsv").onclick = exportarCsv;
+$("#btnImprimir").onclick = () => window.print();
+$("#soloProblemas").onchange = render;
+$("#btnNuevo").onclick = async () => {
+  if (!confirm("¿Empezar un proyecto nuevo? Se borrarán los audios y textos actuales de esta app (tus archivos originales no se tocan).")) return;
+  await API("/api/nuevo", { method: "POST" });
+  estado.filas = [nuevaFila()]; lote = null; $("#estadoLote").textContent = "";
+  render(); guardar();
+};
+$("#idioma").onchange = e => { estado.idioma = e.target.value; render(); guardar(); };
+let tNota;
+async function notaModelo() {
+  clearTimeout(tNota);
+  const pedido = estado.modelo;
+  let r;
+  try { r = await API(`/api/modelo/${encodeURIComponent(pedido)}`); } catch { return; }
+  if (pedido !== estado.modelo) return;
+  const nota = $("#notaModelo");
+  nota.textContent = r.texto;
+  nota.classList.toggle("activa", r.estado === "descargando");
+  if (r.estado === "descargando") tNota = setTimeout(notaModelo, 1500);
+}
+
+/* ---------------- Inicio ---------------- */
+(async function iniciar() {
+  const cfg = await API("/api/config");
+  estado.modelo = cfg.modelo_defecto;
+  const p = await API("/api/proyecto");
+  if (p && p.filas) {
+    estado.filas = p.filas.map(f => nuevaFila(f));
+    if (["es", "en"].includes(p.idioma)) estado.idioma = p.idioma;
+  }
+  if (!estado.filas.length) estado.filas = [nuevaFila()];
+  $("#idioma").value = estado.idioma;
+  notaModelo();
+  render();
+})();
+</script>
+</body>
+</html>
