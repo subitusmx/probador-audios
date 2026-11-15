@@ -206,9 +206,17 @@ jobs:
 
           $env:PROBADOR_MODELO = 'small'
           $env:PROBADOR_SIN_NAVEGADOR = '1'
+          $env:PROBADOR_SIN_PAUSA = '1'
           $p = Start-Process "$env:LOCALAPPDATA\Programs\ProbadorAudios\iniciar.bat" -PassThru -NoNewWindow `
                  -RedirectStandardOutput servidor.log -RedirectStandardError servidor.err
           "$($p.Id)" | Out-File pid.txt
+          # Esperar a que el servidor responda (y fallar de inmediato si la app se cierra)
+          $listo = $false
+          for ($i = 0; $i -lt 300 -and -not $listo; $i++) {
+            if ($p.HasExited) { Get-Content servidor.log; Get-Content servidor.err; throw "La app se cerró (código $($p.ExitCode))" }
+            try { $listo = (Invoke-RestMethod http://127.0.0.1:8765/api/ping -TimeoutSec 2).ok } catch { Start-Sleep 3 }
+          }
+          if (-not $listo) { throw "La app no arrancó en 15 minutos" }
           python tests/e2e.py --audio prueba.wav --texto $texto --idioma $idioma --minutos 30
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

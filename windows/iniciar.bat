@@ -45,14 +45,22 @@ rem 2) Motor de instalacion (uv). Se instala una sola vez.
 if exist "%UV%" goto :uv_listo
 echo   Primera vez: instalando el motor de la app, 1 o 2 minutos...
 echo.
+if not exist "%DATOS_APP%\bin" mkdir "%DATOS_APP%\bin"
+set "UV_ZIP=%TEMP%\probador-uv.zip"
+curl -L -s -f -o "%UV_ZIP%" https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip
+if exist "%UV_ZIP%" tar -xf "%UV_ZIP%" -C "%DATOS_APP%\bin"
+del "%UV_ZIP%" >nul 2>&1
+if exist "%UV%" goto :uv_listo
+rem Alternativa: instalador oficial con PowerShell (sin modulos heredados de otra consola)
+set "PSModulePath="
 set "UV_UNMANAGED_INSTALL=%DATOS_APP%\bin"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { irm https://astral.sh/uv/install.ps1 | iex } catch { irm https://github.com/astral-sh/uv/releases/latest/download/uv-installer.ps1 | iex }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
 set "UV_UNMANAGED_INSTALL="
 if exist "%UV%" goto :uv_listo
 echo.
 echo   No se pudo instalar. Revisa tu conexion a internet y vuelve a intentarlo.
 echo.
-pause
+if not "%PROBADOR_SIN_PAUSA%"=="1" pause
 exit /b 1
 :uv_listo
 
@@ -73,6 +81,6 @@ echo.
 echo   La app se cerro. Si fue por un error y es la primera vez,
 echo   revisa tu conexion a internet y vuelve a abrirla.
 echo.
-pause
+if not "%PROBADOR_SIN_PAUSA%"=="1" pause
 endlocal
 exit /b 1
