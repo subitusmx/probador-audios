@@ -9,6 +9,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      publicar_version:
+        description: "Para publicar una versión nueva escribe su número (ej. 1.0.1). Déjalo vacío para solo armar y probar."
+        required: false
+        default: ""
 
 concurrency:
   group: construir-${{ github.ref }}
@@ -25,8 +30,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Versión
+        env:
+          PUBLICAR: ${{ inputs.publicar_version }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.0.${GITHUB_RUN_NUMBER}"; fi
+          if [ -n "$PUBLICAR" ]; then V="${PUBLICAR#v}"; elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.0.${GITHUB_RUN_NUMBER}"; fi
           echo "VERSION=$V" >> "$GITHUB_ENV"
           echo "BUILD=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           echo "Versión: $V (firma: $FIRMA_MAC)"
@@ -149,8 +156,10 @@ jobs:
 
       - name: Versión
         shell: bash
+        env:
+          PUBLICAR: ${{ inputs.publicar_version }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.0.${GITHUB_RUN_NUMBER}"; fi
+          if [ -n "$PUBLICAR" ]; then V="${PUBLICAR#v}"; elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.0.${GITHUB_RUN_NUMBER}"; fi
           echo "VERSION=$V" >> "$GITHUB_ENV"
 
       - name: Armar el instalador
@@ -258,7 +267,7 @@ jobs:
 
   publicar:
     name: Publicar versión
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publicar_version != ''
     needs: [mac, windows]
     runs-on: ubuntu-latest
     permissions:
@@ -271,6 +280,8 @@ jobs:
       - name: Crear la versión en Releases
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLICAR: ${{ inputs.publicar_version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
-            --title "Probador de Audios ${GITHUB_REF_NAME#v}" --generate-notes
+          if [ -n "$PUBLICAR" ]; then ETIQUETA="v${PUBLICAR#v}"; else ETIQUETA="$GITHUB_REF_NAME"; fi
+          gh release create "$ETIQUETA" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Probador de Audios ${ETIQUETA#v}" --generate-notes
