@@ -20,7 +20,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 75
     env:
-      FIRMA_MAC: ${{ secrets.MAC_CERT_P12 != '' && secrets.APPLE_API_KEY_P8 != '' }}
+      FIRMA_MAC: ${{ secrets.MAC_CERT_P12 != '' && (secrets.APPLE_API_KEY_P8 != '' || secrets.APPLE_ID != '') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,6 +68,9 @@ jobs:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           ditto -c -k --keepParent "dist/Probador de Audios.app" dist/app.zip
           bash mac/notarizar.sh dist/app.zip
@@ -83,6 +86,9 @@ jobs:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           bash mac/notarizar.sh dist/ProbadorAudios-Mac.dmg
           xcrun stapler staple dist/ProbadorAudios-Mac.dmg
