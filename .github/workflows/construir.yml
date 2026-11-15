@@ -217,6 +217,7 @@ jobs:
             try { $listo = (Invoke-RestMethod http://127.0.0.1:8765/api/ping -TimeoutSec 2).ok } catch { Start-Sleep 3 }
           }
           if (-not $listo) { throw "La app no arrancó en 15 minutos" }
+          $env:PYTHONIOENCODING = 'utf-8'
           python tests/e2e.py --audio prueba.wav --texto $texto --idioma $idioma --minutos 30
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -238,6 +239,7 @@ jobs:
           if (Test-Path "$dir\iniciar.bat") { throw "La desinstalación no borró la app" }
           if (Test-Path "$env:LOCALAPPDATA\ProbadorAudios") { throw "La desinstalación no borró el modelo y componentes" }
           Write-Host "Desinstalación limpia"
+          exit 0
 
       - uses: actions/upload-artifact@v4
         with:
