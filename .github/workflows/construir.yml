@@ -133,7 +133,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 75
     env:
-      FIRMA_WIN: ${{ secrets.WIN_FIRMA_CONFIGURADA == 'si' }}
+      # SSL.com cobra/limita las firmas: solo se firma al publicar una versión (etiqueta vX.Y.Z)
+      FIRMA_WIN: ${{ secrets.ES_USERNAME != '' && secrets.ES_TOTP_SECRET != '' && startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -154,7 +155,28 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Item dist\ProbadorAudios-Windows-Setup.exe
 
-      # (Aquí se agrega la firma con el certificado en la nube cuando esté configurado)
+      - name: Firmar con SSL.com eSigner
+        if: env.FIRMA_WIN == 'true'
+        uses: sslcom/esigner-codesign@develop
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ github.workspace }}/dist/ProbadorAudios-Windows-Setup.exe
+          output_path: ${{ github.workspace }}/firmado
+          environment_name: PROD
+          malware_block: false
+
+      - name: Comprobar la firma
+        if: env.FIRMA_WIN == 'true'
+        shell: pwsh
+        run: |
+          Move-Item -Force firmado\ProbadorAudios-Windows-Setup.exe dist\ProbadorAudios-Windows-Setup.exe
+          $firma = Get-AuthenticodeSignature dist\ProbadorAudios-Windows-Setup.exe
+          $firma | Format-List Status, StatusMessage, SignerCertificate
+          if ($firma.Status -ne 'Valid') { throw "La firma no es válida: $($firma.StatusMessage)" }
 
       - name: Instalar en modo silencioso
         shell: pwsh
