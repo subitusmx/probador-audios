@@ -142,8 +142,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 75
     env:
-      # SSL.com cobra/limita las firmas: solo se firma al publicar una versión (etiqueta vX.Y.Z)
-      FIRMA_WIN: ${{ secrets.ES_USERNAME != '' && secrets.ES_TOTP_SECRET != '' && startsWith(github.ref, 'refs/tags/v') }}
+      # SSL.com limita las firmas: solo se firma al publicar una versión (etiqueta vX.Y.Z) o al correrlo a mano
+      FIRMA_WIN: ${{ secrets.ES_USERNAME != '' && secrets.ES_TOTP_SECRET != '' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') }}
     steps:
       - uses: actions/checkout@v4
 
